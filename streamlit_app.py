@@ -44,7 +44,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Backend URL (you can make this configurable)
+# Backend URL (make configurable if you want)
 BACKEND_URL = "https://testcasegenerator-backend-production.up.railway.app"
 
 def check_backend_health():
@@ -180,6 +180,8 @@ with col1:
                 st.warning(f"⚠️ Content is {char_count:,} characters. It will be truncated to 5000 characters for processing.")
             elif char_count < 100:
                 st.warning("⚠️ Content seems very short. Consider adding more detailed requirements for better test cases.")
+        else:
+            st.error("❌ Failed to extract text from the uploaded file.")
 
 with col2:
     if srs_text:
@@ -208,109 +210,121 @@ if srs_text:
     with col2:
         if st.button("🧪 Generate Test Cases", type="primary", use_container_width=True):
             
-            # Show generation progress
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            status_text.text("🔄 Connecting to AI backend...")
-            progress_bar.progress(20)
-            time.sleep(0.5)
-            
-            status_text.text("🤖 AI is analyzing your SRS...")
-            progress_bar.progress(40)
-            
-            # Call API
-            start_time = time.time()
-            status_code, response_data = generate_test_cases_api(srs_text)
-            generation_time = time.time() - start_time
-            
-            progress_bar.progress(80)
-            status_text.text("✨ Formatting test cases...")
-            time.sleep(0.5)
-            
-            progress_bar.progress(100)
-            status_text.empty()
-            progress_bar.empty()
-            
-            # Handle response
-            if status_code == 200:
-                test_cases = response_data.get("test_cases", [])
+            # Validate empty input (extra safety)
+            if not srs_text.strip():
+                st.error("❌ SRS content is empty. Please upload a valid SRS document.")
+            else:
+                # Show generation progress
+                progress_bar = st.progress(0)
+                status_text = st.empty()
                 
-                if test_cases:
-                    st.markdown(f"""
-                    <div class="status-box success-box">
-                        <strong>✅ Successfully Generated {len(test_cases)} Test Cases</strong><br>
-                        Generation time: {generation_time:.1f}s<br>
-                        Model used: {response_data.get('model_used', 'AI Model')}
-                    </div>
-                    """, unsafe_allow_html=True)
+                status_text.text("🔄 Connecting to AI backend...")
+                progress_bar.progress(20)
+                time.sleep(0.5)
+                
+                status_text.text("🤖 AI is analyzing your SRS...")
+                progress_bar.progress(40)
+                
+                # Call API
+                start_time = time.time()
+                status_code, response_data = generate_test_cases_api(srs_text)
+                generation_time = time.time() - start_time
+                
+                progress_bar.progress(80)
+                status_text.text("✨ Formatting test cases...")
+                time.sleep(0.5)
+                
+                progress_bar.progress(100)
+                status_text.empty()
+                progress_bar.empty()
+                
+                # Handle response
+                if status_code == 200:
+                    test_cases = response_data.get("test_cases", [])
                     
-                    st.subheader("📋 Generated Test Cases")
+                    model_used = response_data.get("model_used", "AI Model")
+                    generation_method = response_data.get("generation_method", "Primary AI Model")
+                    fallback_used = response_data.get("fallback_to_template", False)
                     
-                    # Display test cases with better formatting
-                    for i, tc in enumerate(test_cases, 1):
-                        with st.expander(f"**Test Case {i:02d}**", expanded=True):
-                            # Parse test case components
-                            if ' - ' in tc:
-                                parts = tc.split(' - ')
-                                if len(parts) >= 3:
-                                    tc_id_objective = parts[0]
-                                    steps = parts[1]
-                                    expected = ' - '.join(parts[2:])
-                                    
-                                    st.markdown(f"**🎯 Objective:** {tc_id_objective}")
-                                    st.markdown(f"**📝 Steps:** {steps}")
-                                    st.markdown(f"**✅ Expected Result:** {expected}")
+                    if test_cases:
+                        st.markdown(f"""
+                        <div class="status-box success-box">
+                            <strong>✅ Successfully Generated {len(test_cases)} Test Cases</strong><br>
+                            Generation time: {generation_time:.1f}s<br>
+                            Model used: {model_used}<br>
+                            Generation method: {generation_method}
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if fallback_used:
+                            st.info("ℹ️ The AI model fell back to template-based generation for this output to ensure stability.")
+                        
+                        st.subheader("📋 Generated Test Cases")
+                        
+                        # Display test cases with better formatting
+                        for i, tc in enumerate(test_cases, 1):
+                            with st.expander(f"**Test Case {i:02d}**", expanded=True):
+                                # Parse test case components
+                                if ' - ' in tc:
+                                    parts = tc.split(' - ')
+                                    if len(parts) >= 3:
+                                        tc_id_objective = parts[0]
+                                        steps = parts[1]
+                                        expected = ' - '.join(parts[2:])
+                                        
+                                        st.markdown(f"**🎯 Objective:** {tc_id_objective}")
+                                        st.markdown(f"**📝 Steps:** {steps}")
+                                        st.markdown(f"**✅ Expected Result:** {expected}")
+                                    else:
+                                        st.write(tc)
                                 else:
                                     st.write(tc)
-                            else:
-                                st.write(tc)
+                        
+                        # Export options
+                        st.markdown("---")
+                        st.subheader("💾 Export Options")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            # Text export
+                            export_text = "\n".join([f"{i}. {tc}" for i, tc in enumerate(test_cases, 1)])
+                            st.download_button(
+                                label="📄 Download as Text",
+                                data=export_text,
+                                file_name=f"test_cases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                                mime="text/plain"
+                            )
+                        
+                        with col2:
+                            # Copy to clipboard option
+                            if st.button("📋 Copy to Clipboard"):
+                                st.code(export_text, language=None)
+                                st.success("✅ Test cases displayed above for copying!")
                     
-                    # Export options
-                    st.markdown("---")
-                    st.subheader("💾 Export Options")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # Text export
-                        export_text = "\n".join([f"{i}. {tc}" for i, tc in enumerate(test_cases, 1)])
-                        st.download_button(
-                            label="📄 Download as Text",
-                            data=export_text,
-                            file_name=f"test_cases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                            mime="text/plain"
-                        )
-                    
-                    with col2:
-                        # Copy to clipboard option
-                        if st.button("📋 Copy to Clipboard"):
-                            st.code(export_text, language=None)
-                            st.success("✅ Test cases displayed above for copying!")
-                
+                    else:
+                        st.markdown("""
+                        <div class="status-box error-box">
+                            <strong>❌ No test cases generated</strong><br>
+                            The AI couldn't generate test cases from your SRS content.
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
                 else:
-                    st.markdown("""
+                    error_msg = response_data.get("error", "Unknown error occurred")
+                    st.markdown(f"""
                     <div class="status-box error-box">
-                        <strong>❌ No test cases generated</strong><br>
-                        The AI couldn't generate test cases from your SRS content.
+                        <strong>❌ Generation Failed</strong><br>
+                        Error: {error_msg}<br>
+                        Status Code: {status_code}
                     </div>
                     """, unsafe_allow_html=True)
                     
-            else:
-                error_msg = response_data.get("error", "Unknown error occurred")
-                st.markdown(f"""
-                <div class="status-box error-box">
-                    <strong>❌ Generation Failed</strong><br>
-                    Error: {error_msg}<br>
-                    Status Code: {status_code}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Provide helpful suggestions
-                if status_code == 408:
-                    st.info("💡 **Tip:** Try with shorter SRS content or simpler requirements.")
-                elif status_code == 503:
-                    st.info("💡 **Tip:** Backend service might be starting up. Please wait a moment and try again.")
+                    # Provide helpful suggestions
+                    if status_code == 408:
+                        st.info("💡 **Tip:** Try with shorter SRS content or simpler requirements.")
+                    elif status_code == 503:
+                        st.info("💡 **Tip:** Backend service might be starting up. Please wait a moment and try again.")
 
 # Footer
 st.markdown("---")
