@@ -45,7 +45,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Backend URL (make configurable if you want)
-BACKEND_URL = "https://testcasegenerator-backend-production.up.railway.app"
+BACKEND_URL = "https://huggingface.co/spaces/dhanush1023/testCaseGenerator"
 
 def check_backend_health():
     """Check if backend is healthy"""
